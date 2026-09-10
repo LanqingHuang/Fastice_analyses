@@ -5,12 +5,19 @@ import re
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import panel as pn
 import rasterio
 import seaborn as sns
 
 
 # Prevent figures from appearing in the notebook
-plt.ioff()
+plt.ioff() 
+
+# Enable Panel/Bokeh components used by the interactive HTML viewers
+pn.extension()
+
+# Display width of the images inside the interactive viewers
+IMAGE_WIDTH = 900
 
 
 # ---------------------------------------------------------
@@ -523,6 +530,211 @@ for insar_root in insar_folders:
     )
 
     plt.close(fig)
+
+
+    # -----------------------------------------------------
+    # Interactive time-series viewers
+    # -----------------------------------------------------
+
+    def date_heading(item):
+
+        return pn.pane.Markdown(
+            f"## {short_date(item)}",
+            width=IMAGE_WIDTH
+        )
+
+
+    def png_pane(image_path):
+
+        return pn.pane.PNG(
+            str(image_path),
+            width=IMAGE_WIDTH,
+            sizing_mode="fixed"
+        )
+
+
+    def coherence_histogram(tif_path):
+
+        with rasterio.open(tif_path) as source:
+
+            values = source.read(
+                1,
+                masked=True
+            ).compressed()
+
+        values = values[np.isfinite(values)]
+        values = values[
+            (values >= 0) & (values <= 1)
+        ]
+
+        fig, axis = plt.subplots(
+            figsize=(9, 4)
+        )
+
+        axis.hist(
+            values,
+            bins=50,
+            range=(0, 1),
+            color="steelblue",
+            edgecolor="black",
+            linewidth=0.4
+        )
+
+        axis.set_xlim(0, 1)
+        axis.set_xlabel("Coherence")
+        axis.set_ylabel("Number of pixels")
+        axis.grid(alpha=0.25)
+        fig.tight_layout()
+
+        # The figure remains available to the Panel pane,
+        # while preventing it from appearing separately.
+        plt.close(fig)
+
+        return fig
+
+
+    def build_viewer(show_function):
+
+        frame_player = pn.widgets.Player(
+            name="Frame",
+            start=0,
+            end=len(datasets) - 1,
+            value=0,
+            step=1,
+            interval=1000,
+            loop_policy="loop",
+            width=IMAGE_WIDTH
+        )
+
+        frame_view = pn.bind(
+            show_function,
+            frame=frame_player
+        )
+
+        return pn.Column(
+            frame_player,
+            frame_view,
+            width=IMAGE_WIDTH
+        )
+
+
+    # -----------------------------------------------------
+    # Viewer 1: filtered phase and amplitude
+    # -----------------------------------------------------
+
+    def show_phase_amplitude(frame):
+
+        item = datasets[frame]
+
+        return pn.Column(
+
+            date_heading(item),
+
+            pn.pane.Markdown(
+                "### Filtered topophase with fast-ice boundary"
+            ),
+
+            png_pane(item["phase_boundary"]),
+
+            pn.pane.Markdown(
+                "### Amplitude with fast-ice boundary"
+            ),
+
+            png_pane(item["amplitude_boundary"]),
+
+        )
+
+
+    phase_amplitude_viewer = build_viewer(
+        show_phase_amplitude
+    )
+
+
+    # -----------------------------------------------------
+    # Viewer 2: coherence images and histogram
+    # -----------------------------------------------------
+
+    def show_coherence(frame):
+
+        item = datasets[frame]
+
+        histogram = coherence_histogram(
+            str(item["coherence_only_tif"])
+        )
+
+        return pn.Column(
+
+            date_heading(item),
+
+            pn.pane.Markdown(
+                "### Coherence with fast-ice boundary"
+            ),
+
+            png_pane(item["coherence_boundary"]),
+
+            pn.pane.Markdown(
+                "### Coherence inside the fast-ice area"
+            ),
+
+            png_pane(item["coherence_only_png"]),
+
+            pn.pane.Markdown(
+                "### Coherence value distribution"
+            ),
+
+            pn.pane.Matplotlib(
+                histogram,
+                width=IMAGE_WIDTH,
+                tight=True
+            ),
+
+        )
+
+
+    coherence_viewer = build_viewer(
+        show_coherence
+    )
+
+
+    # In a notebook, either viewer can optionally be displayed with:
+    # display(pn.ipywidget(phase_amplitude_viewer))
+    # display(pn.ipywidget(coherence_viewer))
+
+
+    # -----------------------------------------------------
+    # Save interactive HTML viewers
+    # -----------------------------------------------------
+
+    phase_amplitude_html = (
+        export_folder
+        / "interactive_phase_amplitude.html"
+    )
+
+    coherence_html = (
+        export_folder
+        / "interactive_coherence.html"
+    )
+
+    phase_amplitude_viewer.save(
+        phase_amplitude_html,
+        embed=True,
+        resources="inline",
+        embed_json=False,
+        max_states=50,
+        max_opts=len(datasets)
+    )
+
+    coherence_viewer.save(
+        coherence_html,
+        embed=True,
+        resources="inline",
+        embed_json=False,
+        max_states=50,
+        max_opts=len(datasets)
+    )
+
+    print(f"Saved: {phase_amplitude_html}")
+    print(f"Saved: {coherence_html}")
 
 
     # Release memory before processing the next InSAR folder

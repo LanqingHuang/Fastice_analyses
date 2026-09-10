@@ -24,13 +24,23 @@ import pandas as pd
 import rasterio
 from rasterio.warp import Resampling, reproject
 
-
+### The Default mode - this is for sentinel products
 DEFAULT_TIFS = (
     "filt_topophase_phase_geo.tif",
     "topophase_amp_geo.tif",
     "topophase_coherence_geo.tif",
 )
 
+
+# #### this is for the NISAR products---------------------
+# DEFAULT_TIFS = (
+#     "coherence.tif",
+#     "phase_iono_corrected_rewrapped.tif",
+#     "wrapped_phase.tif",
+# )
+
+
+########----------------------------------------------##########
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -41,8 +51,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path(
             "/Volumes/shared/Sci-EAE/lahuang_work/working/"
-            "Shackleton1/test_IW1/merged/"
-        ),
+            "Shackleton1/test_IW1/merged/"),
         help=(
             "Directory containing the geocoded InSAR GeoTIFFs "
             "(default: the local path used in the notebook)."
@@ -81,8 +90,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--boundary-width-pixels",
         type=int,
-        default=2,
-        help="Boundary width in pixels (default: 2).",
+        default=10,
+        help="Boundary width in pixels (default: 10).",
     )
     parser.add_argument(
         "--tif-files",
@@ -357,6 +366,22 @@ def process_tif(
 
 def main() -> None:
     args = parse_args()
+
+    ### for NISAR products--------
+    args.geotiff_dir = Path(
+        "/Volumes/shared-1/Sci-EAE/lahuang_work/SAR/NISAR/Mawson/"
+        "output_GUNW/"
+        "NISAR-L2-PR-GUNW-028-099-A-144-029-4000-SH-20260820T023159-20260820T023233-20260901T023159"
+    )
+
+    args.output_dir = args.geotiff_dir / "fast_ice_boundary"
+    input_TIFS = (
+    "coherence.tif",
+    "phase_iono_corrected_rewrapped.tif",
+    "wrapped_phase.tif")
+
+    args.tif_files = list(input_TIFS)
+    #----------------------------
 
     if args.boundary_width_pixels < 1:
         raise ValueError("--boundary-width-pixels must be at least 1.")
